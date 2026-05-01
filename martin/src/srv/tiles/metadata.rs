@@ -7,6 +7,7 @@ use actix_web::middleware::Compress;
 use actix_web::web::{Data, Path};
 use actix_web::{HttpRequest, HttpResponse, Result as ActixResult, route};
 use itertools::Itertools as _;
+use log::info;
 use martin_core::tiles::BoxedSource;
 use serde::Deserialize;
 use tilejson::{TileJSON, tilejson};
@@ -53,23 +54,38 @@ pub async fn get_source_info(
         .get_sources(&path.source_ids, None)?
         .0;
 
+    info!("srv_config: {:#?}", &srv_config);
+    info!("headers: {:#?}", req.headers());
     // Determine the path prefix for tile URLs in TileJSON responses
     // Priority: base_path (explicit override) > route_prefix (where Martin is mounted) > X-Rewrite-URL header > request path
     let tiles_path = if let Some(base_path) = &srv_config.base_path {
+        info!("Setting from srv_config.base_path: {base_path}");
         // If base_path is explicitly set, use it directly
         format!("{base_path}/{}", path.source_ids)
     } else if let Some(route_prefix) = &srv_config.route_prefix {
+        info!("Setting from route_prefix: {route_prefix}");
         // If route_prefix is set, use it (Martin is mounted under a subpath)
         format!("{route_prefix}/{}", path.source_ids)
     } else {
+        info!("Setting from request path");
         // Fall back to X-Rewrite-URL header if present, otherwise use request path
         req.headers()
             .get("X-Rewrite-URL")
             .or(req.headers().get("X-Forwarded-Prefix"))
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<Uri>().ok())
-            .map_or_else(|| req.path().to_string(), |v| v.path().to_string())
+            .map_or_else(
+                || {
+                    info!("fallback to req.path(): {}", req.path());
+                    req.path().to_string()
+                },
+                |v| {
+                    info!("(from headers) v.path(): {}", v.path());
+                    v.path().to_string()
+                }
+            )
     };
+    info!("tiles_path: {}", tiles_path);
 
     let version_param = &srv_config.tilejson_url_version_param;
     let versions: Option<(&str, String)> = if let Some(v) = version_param {
@@ -104,9 +120,13 @@ pub async fn get_source_info(
     } else {
         format!("{tiles_path}/{{z}}/{{x}}/{{y}}?{query}")
     };
+    dbg!(&path_and_query);
 
     // Construct a tiles URL from the request info, including the query string if present.
     let info = req.connection_info();
+    info!("info: {info:?}");
+    dbg!(&info.scheme());
+    dbg!(&info.host());
     let tiles_url = Uri::builder()
         .scheme(info.scheme())
         .authority(info.host())
@@ -114,6 +134,7 @@ pub async fn get_source_info(
         .build()
         .map(|tiles_url| tiles_url.to_string())
         .map_err(|e| ErrorBadRequest(format!("Can't build tiles URL: {e}")))?;
+    dbg!(&tiles_url);
 
     Ok(HttpResponse::Ok().json(merge_tilejson(&sources, tiles_url)))
 }
