@@ -17,6 +17,29 @@ pub struct ProcessConfig {
     pub convert_to_mvt: Option<MvtProcessConfig>,
 }
 
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+impl ProcessConfig {
+    /// Whether MVT→MLT conversion is configured to run on every request,
+    /// regardless of the client's `Accept` header.
+    #[must_use]
+    pub fn always_convert_to_mlt(&self) -> bool {
+        self.convert_to_mlt
+            .as_ref()
+            .and_then(MltProcessConfig::as_explicit)
+            .is_some_and(|c| c.when_to_convert.is_always())
+    }
+
+    /// Whether MLT→MVT conversion is configured to run on every request,
+    /// regardless of the client's `Accept` header.
+    #[must_use]
+    pub fn always_convert_to_mvt(&self) -> bool {
+        self.convert_to_mvt
+            .as_ref()
+            .and_then(MvtProcessConfig::as_explicit)
+            .is_some_and(|c| c.when_to_convert.is_always())
+    }
+}
+
 /// Configuration for MVT-to-MLT format conversion.
 ///
 /// Three-state value parsed from YAML:
@@ -30,11 +53,51 @@ pub type MltProcessConfig = AutoOption<MltEncoderConfig>;
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 pub type MvtProcessConfig = AutoOption<MvtEncoderConfig>;
 
+/// When to apply a format conversion.
+///
+/// Conversion features default to [`MatchAccept`](Self::MatchAccept): the
+/// pipeline only runs when the client's `Accept` header selects the target
+/// format. Set to [`Always`](Self::Always) to convert every tile and have the
+/// source advertised as the post-conversion format regardless of `Accept`.
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "unstable-schemas", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum WhenToConvert {
+    /// Convert only when the client's `Accept` header selects the target format.
+    #[default]
+    MatchAccept,
+    /// Convert every tile, regardless of the client's `Accept` header. The
+    /// source is advertised as the post-conversion format.
+    Always,
+}
+
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+impl WhenToConvert {
+    /// Returns `true` if conversion should happen regardless of `Accept`.
+    #[must_use]
+    pub fn is_always(self) -> bool {
+        matches!(self, Self::Always)
+    }
+}
+
+// serde's `skip_serializing_if` requires `fn(&T) -> bool`.
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_default_when_to_convert(w: &WhenToConvert) -> bool {
+    *w == WhenToConvert::default()
+}
+
 /// Explicit encoder configuration for MVT conversion
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "unstable-schemas", derive(schemars::JsonSchema))]
-pub struct MvtEncoderConfig {}
+pub struct MvtEncoderConfig {
+    /// Whether MLT→MVT conversion runs only when the client's `Accept` header
+    /// asks for MVT (default) or on every request.
+    #[serde(default, skip_serializing_if = "is_default_when_to_convert")]
+    pub when_to_convert: WhenToConvert,
+}
 
 /// Explicit encoder configuration for MLT conversion.
 /// All fields are optional; unset fields use `mlt-core`'s defaults.
@@ -57,6 +120,10 @@ pub struct MltEncoderConfig {
     pub allow_fpf: Option<bool>,
     /// Allow string grouping into shared dictionaries.
     pub allow_shared_dict: Option<bool>,
+    /// Whether MVT→MLT conversion runs only when the client's `Accept` header
+    /// asks for MLT (default) or on every request.
+    #[serde(default, skip_serializing_if = "is_default_when_to_convert")]
+    pub when_to_convert: WhenToConvert,
 }
 
 /// Applying `MltEncoderConfig` overrides on top of `EncoderConfig` defaults.
@@ -76,6 +143,8 @@ impl From<MltEncoderConfig> for EncoderConfig {
             allow_fsst,
             allow_fpf,
             allow_shared_dict,
+            // Processor-pipeline metadata, not part of `mlt-core`'s encoder.
+            when_to_convert: _,
         } = src;
 
         Self {
@@ -129,6 +198,78 @@ mod tests {
     fn parse_mlt_explicit_empty() {
         let cfg: MltProcessConfig = serde_yaml::from_str("{}").unwrap();
         assert_eq!(cfg, MltProcessConfig::Explicit(MltEncoderConfig::default()));
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn parse_mlt_when_to_convert_always() {
+        let cfg: MltProcessConfig = serde_yaml::from_str(indoc! {"
+            when_to_convert: always
+        "})
+        .unwrap();
+        assert_eq!(
+            cfg,
+            MltProcessConfig::Explicit(MltEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+                ..Default::default()
+            })
+        );
+    }
+
+    /// Default `when_to_convert` is `match-accept` and must round-trip without
+    /// being emitted into YAML (so the existing `auto`/explicit shapes stay
+    /// concise on disk).
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn when_to_convert_default_skipped_in_serialization() {
+        let cfg = MltProcessConfig::Explicit(MltEncoderConfig {
+            tessellate: Some(true),
+            ..Default::default()
+        });
+        let yaml = serde_yaml::to_string(&cfg).unwrap();
+        assert!(
+            !yaml.contains("when_to_convert"),
+            "default when_to_convert leaked into YAML: {yaml}"
+        );
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_convert_to_mlt_helper() {
+        let cfg = ProcessConfig {
+            convert_to_mlt: Some(MltProcessConfig::Explicit(MltEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+                ..Default::default()
+            })),
+            convert_to_mvt: None,
+        };
+        assert!(cfg.always_convert_to_mlt());
+        assert!(!cfg.always_convert_to_mvt());
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_convert_to_mvt_helper() {
+        let cfg = ProcessConfig {
+            convert_to_mlt: None,
+            convert_to_mvt: Some(MvtProcessConfig::Explicit(MvtEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+            })),
+        };
+        assert!(!cfg.always_convert_to_mlt());
+        assert!(cfg.always_convert_to_mvt());
+    }
+
+    /// `auto` (no explicit settings) does not trigger Always.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_helpers_are_false_for_auto() {
+        let cfg = ProcessConfig {
+            convert_to_mlt: Some(MltProcessConfig::Auto),
+            convert_to_mvt: Some(MvtProcessConfig::Auto),
+        };
+        assert!(!cfg.always_convert_to_mlt());
+        assert!(!cfg.always_convert_to_mvt());
     }
 
     #[cfg(all(feature = "mlt", feature = "_tiles"))]

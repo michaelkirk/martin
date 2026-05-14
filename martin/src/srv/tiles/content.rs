@@ -282,6 +282,7 @@ impl<'a> DynTileSource<'a> {
         let accepted_format = Self::resolve_accepted_format(
             headers.accepted_formats.as_deref(),
             resolved.info.format,
+            resolved.format_pinned,
         )?;
 
         let mut query_obj = None;
@@ -307,9 +308,18 @@ impl<'a> DynTileSource<'a> {
     /// direction, so when the Accept header lists the opposite vector format
     /// the request resolves to that target. Otherwise the source format must
     /// appear in the accepted list verbatim.
+    ///
+    /// When `format_pinned` is set (the source has `when_to_convert: always`),
+    /// the source serves only the post-conversion format — no opposite-direction
+    /// fallback is allowed. The client either accepts that format or gets a 406.
     fn resolve_accepted_format(
         accepted: Option<&[Format]>,
         source_format: Format,
+        #[cfg_attr(
+            not(all(feature = "mlt", feature = "_tiles")),
+            expect(unused_variables)
+        )]
+        format_pinned: bool,
     ) -> ActixResult<Option<Format>> {
         let Some(formats) = accepted else {
             return Ok(None);
@@ -318,12 +328,13 @@ impl<'a> DynTileSource<'a> {
             return Ok(Some(source_format));
         }
         #[cfg(all(feature = "mlt", feature = "_tiles"))]
-        if source_format == Format::Mvt && formats.contains(&Format::Mlt) {
-            return Ok(Some(Format::Mlt));
-        }
-        #[cfg(all(feature = "mlt", feature = "_tiles"))]
-        if source_format == Format::Mlt && formats.contains(&Format::Mvt) {
-            return Ok(Some(Format::Mvt));
+        if !format_pinned {
+            if source_format == Format::Mvt && formats.contains(&Format::Mlt) {
+                return Ok(Some(Format::Mlt));
+            }
+            if source_format == Format::Mlt && formats.contains(&Format::Mvt) {
+                return Ok(Some(Format::Mvt));
+            }
         }
         Err(ErrorNotAcceptable(format!(
             "Source produces {}, which does not match the Accept header",
@@ -905,7 +916,8 @@ mod tests {
     #[case::multi_with_match(&["application/x-protobuf", "image/png"], Format::Mvt)]
     fn test_accept_ok(#[case] accept_values: &[&str], #[case] source_format: Format) {
         let parsed = parse_accept_header(accept_values);
-        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format);
+        let result =
+            DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format, false);
         assert_eq!(result.unwrap(), Some(source_format));
     }
 
@@ -915,7 +927,8 @@ mod tests {
     #[case::mvt_vs_png(&["application/x-protobuf"], Format::Png)]
     fn test_accept_406(#[case] accept_values: &[&str], #[case] source_format: Format) {
         let parsed = parse_accept_header(accept_values);
-        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format);
+        let result =
+            DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format, false);
         assert!(result.is_err());
     }
 
@@ -927,7 +940,8 @@ mod tests {
     #[case::mvt_vs_mlt(&["application/x-protobuf"], Format::Mlt)]
     fn test_accept_406_without_mlt(#[case] accept_values: &[&str], #[case] source_format: Format) {
         let parsed = parse_accept_header(accept_values);
-        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format);
+        let result =
+            DynTileSource::resolve_accepted_format(parsed.as_deref(), source_format, false);
         assert!(result.is_err());
     }
 
@@ -941,7 +955,7 @@ mod tests {
     #[case::mlt_with_other(&["image/png", "application/vnd.maplibre-tile"])]
     fn test_accept_mlt_on_mvt_source_converts(#[case] accept_values: &[&str]) {
         let parsed = parse_accept_header(accept_values);
-        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), Format::Mvt);
+        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), Format::Mvt, false);
         assert_eq!(result.unwrap(), Some(Format::Mlt));
     }
 
@@ -954,8 +968,35 @@ mod tests {
     #[case::mvt_with_other(&["image/png", "application/x-protobuf"])]
     fn test_accept_mvt_on_mlt_source_converts(#[case] accept_values: &[&str]) {
         let parsed = parse_accept_header(accept_values);
-        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), Format::Mlt);
+        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), Format::Mlt, false);
         assert_eq!(result.unwrap(), Some(Format::Mvt));
+    }
+
+    /// With `format_pinned` set (source has `when_to_convert: always`), the
+    /// Accept negotiator must not fall back to the opposite vector format —
+    /// the client either accepts the pinned format or gets a 406.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[rstest]
+    #[case::pinned_mlt_vs_mvt(Format::Mlt, &["application/x-protobuf"])]
+    #[case::pinned_mvt_vs_mlt(Format::Mvt, &["application/vnd.maplibre-tile"])]
+    fn test_accept_pinned_no_fallback(
+        #[case] effective_format: Format,
+        #[case] accept_values: &[&str],
+    ) {
+        let parsed = parse_accept_header(accept_values);
+        let result =
+            DynTileSource::resolve_accepted_format(parsed.as_deref(), effective_format, true);
+        assert!(result.is_err());
+    }
+
+    /// With `format_pinned` set, an exact match against the effective format
+    /// still resolves successfully.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn test_accept_pinned_exact_match() {
+        let parsed = parse_accept_header(&["application/vnd.maplibre-tile"]);
+        let result = DynTileSource::resolve_accepted_format(parsed.as_deref(), Format::Mlt, true);
+        assert_eq!(result.unwrap(), Some(Format::Mlt));
     }
 
     /// Compositing sources with mismatched formats (MVT + MLT) should return an error.

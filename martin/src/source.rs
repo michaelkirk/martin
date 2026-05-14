@@ -4,6 +4,8 @@ use actix_web::error::ErrorNotFound;
 use dashmap::DashMap;
 use martin_core::tiles::catalog::TileCatalog;
 use martin_core::tiles::{BoxedSource, Source};
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use martin_tile_utils::Format;
 use martin_tile_utils::TileInfo;
 use tracing::debug;
 
@@ -13,7 +15,34 @@ use crate::config::file::ProcessConfig;
 pub struct ResolvedSources {
     pub sources: Vec<(BoxedSource, ProcessConfig)>,
     pub use_url_query: bool,
+    /// The effective `TileInfo` advertised to the client. For sources
+    /// configured with `when_to_convert: always`, this is the post-conversion
+    /// format (not the source's native format).
     pub info: TileInfo,
+    /// True when [`info`](Self::info) reflects an `Always` conversion. In that
+    /// case the source serves only the post-conversion format, so `Accept`
+    /// negotiation must not fall back to the opposite direction.
+    pub format_pinned: bool,
+}
+
+/// Returns the effective `TileInfo` for a source after applying its
+/// `when_to_convert: always` setting (if any).
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+fn effective_info(native: TileInfo, pc: &ProcessConfig) -> TileInfo {
+    use martin_tile_utils::Encoding;
+
+    if native.format == Format::Mvt && pc.always_convert_to_mlt() {
+        TileInfo::new(Format::Mlt, Encoding::Uncompressed)
+    } else if native.format == Format::Mlt && pc.always_convert_to_mvt() {
+        TileInfo::new(Format::Mvt, Encoding::Uncompressed)
+    } else {
+        native
+    }
+}
+
+#[cfg(not(all(feature = "mlt", feature = "_tiles")))]
+fn effective_info(native: TileInfo, _pc: &ProcessConfig) -> TileInfo {
+    native
 }
 
 /// Thread-safe registry of tile sources indexed by ID.
@@ -102,11 +131,14 @@ impl TileSources {
         let mut sources = Vec::new();
         let mut info: Option<TileInfo> = None;
         let mut use_url_query = false;
+        let mut format_pinned = false;
 
         for id in source_ids.split(',') {
             let (src, pc) = self.get_source(id)?;
-            let src_inf = src.get_tile_info();
+            let native_inf = src.get_tile_info();
+            let src_inf = effective_info(native_inf, &pc);
             use_url_query |= src.support_url_query();
+            format_pinned |= src_inf != native_inf;
 
             // make sure all sources have the same format and encoding
             // TODO: support multiple encodings of the same format
@@ -132,6 +164,7 @@ impl TileSources {
             sources,
             use_url_query,
             info: info.expect("at least one source must be present"),
+            format_pinned,
         })
     }
 

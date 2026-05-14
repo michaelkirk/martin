@@ -46,8 +46,11 @@ impl From<ProcessError> for actix_web::Error {
 ///   absent block is treated as `convert_to_mlt: auto` and uses `mlt-core`'s defaults.
 ///   `convert_to_mlt: disabled` (or any of `off`/`no`/`false`) skips conversion entirely
 ///   even if the client asked for MLT — the original MVT bytes are returned.
+///   When the explicit config sets `when_to_convert: always`, conversion runs on every
+///   MVT tile, regardless of `accepted`.
 /// - MLT -> MVT conversion when the client requests `application/vnd.mapbox-vector-tile`
 ///   from an MLT source (requires `mlt` feature). `convert_to_mvt: disabled` skips it.
+///   `when_to_convert: always` on the explicit config forces conversion on every MLT tile.
 ///
 /// Runs inside the cache miss path so cached entries are already post-processed.
 /// MVT and MLT requests are keyed separately in the tile cache, so both formats
@@ -62,7 +65,9 @@ pub fn apply_pre_cache_processors(
     }
 
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
-    let tile = if accepted == Some(Format::Mlt) && tile.info.format == Format::Mvt {
+    let tile = if tile.info.format == Format::Mvt
+        && (accepted == Some(Format::Mlt) || config.always_convert_to_mlt())
+    {
         match config.convert_to_mlt.as_ref() {
             // No level configured anything -> use defaults.
             None | Some(MltProcessConfig::Auto) => {
@@ -74,8 +79,8 @@ pub fn apply_pre_cache_processors(
             // Explicitly opted out — serve the original MVT bytes.
             Some(MltProcessConfig::Disabled) => tile,
         }
-    } else if accepted == Some(Format::Mvt)
-        && tile.info.format == Format::Mlt
+    } else if tile.info.format == Format::Mlt
+        && (accepted == Some(Format::Mvt) || config.always_convert_to_mvt())
         && !config
             .convert_to_mvt
             .as_ref()
@@ -246,5 +251,71 @@ mod tests {
         let result =
             apply_pre_cache_processors(tile, &ProcessConfig::default(), Some(Format::Mvt)).unwrap();
         assert_eq!(result.info.format, Format::Mvt);
+    }
+
+    /// `when_to_convert: always` on `convert_to_mlt` forces MVT→MLT conversion
+    /// even when no Accept header is present.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_convert_to_mlt_runs_without_accept_header() {
+        use crate::config::file::{MltEncoderConfig, WhenToConvert};
+
+        let tile = make_tile(empty_layer_mvt_bytes(), Format::Mvt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            convert_to_mlt: Some(MltProcessConfig::Explicit(MltEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, None).unwrap();
+        assert_eq!(result.info.format, Format::Mlt);
+        assert_eq!(result.info.encoding, Encoding::Uncompressed);
+    }
+
+    /// `when_to_convert: always` on `convert_to_mlt` forces conversion even when
+    /// the client's `Accept` header asks for MVT.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_convert_to_mlt_overrides_mvt_accept() {
+        use crate::config::file::{MltEncoderConfig, WhenToConvert};
+
+        let tile = make_tile(empty_layer_mvt_bytes(), Format::Mvt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            convert_to_mlt: Some(MltProcessConfig::Explicit(MltEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, Some(Format::Mvt)).unwrap();
+        assert_eq!(result.info.format, Format::Mlt);
+    }
+
+    /// `when_to_convert: always` on `convert_to_mvt` forces MLT→MVT conversion
+    /// even when no Accept header is present.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn always_convert_to_mvt_runs_without_accept_header() {
+        use crate::config::file::{MvtEncoderConfig, WhenToConvert};
+
+        // First produce an MLT tile to feed into the always-MVT pipeline.
+        let original = make_tile(mvt_with_feature(), Format::Mvt, Encoding::Uncompressed);
+        let encoded =
+            apply_pre_cache_processors(original, &ProcessConfig::default(), Some(Format::Mlt))
+                .unwrap();
+        assert!(!encoded.data.is_empty());
+
+        let tile = make_tile(encoded.data, Format::Mlt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            convert_to_mvt: Some(MvtProcessConfig::Explicit(MvtEncoderConfig {
+                when_to_convert: WhenToConvert::Always,
+            })),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, None).unwrap();
+        assert_eq!(result.info.format, Format::Mvt);
+        assert_eq!(result.info.encoding, Encoding::Uncompressed);
+        assert!(!result.data.is_empty());
     }
 }
