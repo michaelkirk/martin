@@ -2878,7 +2878,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "hdrhistogram",
- "hotpath-macros",
+ "hotpath-macros 0.15.1",
  "hotpath-meta",
  "libc",
  "mach2",
@@ -2901,6 +2901,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hotpath"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bff002d5c53fa1c6891f32156b9451d16654bc8a761894d7660b25c0a332d517"
+dependencies = [
+ "hotpath-macros 0.16.1",
+]
+
+[[package]]
 name = "hotpath-macros"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2910,6 +2919,12 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "hotpath-macros"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e2f4ac4534511584b7082657e133dcf3d8727b2f456a6b2a2c3eb02b82c1277"
 
 [[package]]
 name = "hotpath-macros-meta"
@@ -4036,7 +4051,7 @@ dependencies = [
  "dashmap",
  "enum-display",
  "futures",
- "hotpath",
+ "hotpath 0.15.1",
  "humantime-serde",
  "image",
  "indicatif 0.18.4",
@@ -4101,7 +4116,7 @@ dependencies = [
  "derive-debug",
  "env_logger",
  "futures",
- "hotpath",
+ "hotpath 0.15.1",
  "image",
  "image-compare",
  "insta",
@@ -4192,7 +4207,7 @@ dependencies = [
  "flate2",
  "flume 0.12.0",
  "futures",
- "hotpath",
+ "hotpath 0.15.1",
  "insta",
  "itertools 0.14.0",
  "martin-tile-utils",
@@ -4331,9 +4346,8 @@ dependencies = [
 
 [[package]]
 name = "mlt-core"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1f2380112343343543c9f6a9d726882f1ae8765a178d88da8f304d8038de5b6"
+version = "0.9.3"
+source = "git+https://github.com/michaelkirk/maplibre-tile-spec.git?tag=rust-decoding-defaults-to-no-encoding-20260519.0#fe3a69ec09064fa455087e94583b4ee2fb1e48ca"
 dependencies = [
  "bitvec",
  "bytemuck",
@@ -4345,7 +4359,7 @@ dependencies = [
  "geo-types",
  "hex",
  "hilbert_2d",
- "hotpath",
+ "hotpath 0.16.1",
  "integer-encoding",
  "mvt",
  "mvt-reader",

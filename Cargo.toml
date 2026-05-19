@@ -100,7 +100,9 @@ martin-tile-utils = { path = "./martin-tile-utils", version = "0.7.3" }
 mbtiles = { path = "./mbtiles", version = "0.17.6" }
 md5 = "0.8.0"
 miette = { version = "7.6", features = ["fancy"] }
-mlt-core = { version = "0.9.1", default-features = false }
+# mlt-core = { version = "0.9.1", default-features = false }
+# Work around: https://github.com/maplibre/maplibre-gl-js/issues/7659
+mlt-core = { default-features = false, git = "https://github.com/michaelkirk/maplibre-tile-spec.git", tag = "rust-decoding-defaults-to-no-encoding-20260519.0" }
 moka = { version = "0.12", default-features = false }
 notify = "8.2.0"
 num_cpus = "1"
