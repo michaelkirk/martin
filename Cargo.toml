@@ -102,7 +102,9 @@ martin-tile-utils = { path = "./martin-tile-utils", version = "0.7.4" }
 mbtiles = { path = "./mbtiles", version = "0.18.0" }
 md5 = "0.8.0"
 miette = { version = "7.6", features = ["fancy"] }
-mlt-core = { version = "0.9.1", default-features = false }
+# TEMP: local checkout with always-emit-presence patch (do not merge)
+# mlt-core = { path = "../mlt-martin-headway/rust/mlt-core", default-features = false }
+mlt-core = { git = "https://github.com/michaelkirk/maplibre-tile-spec.git", branch = "mlt-martin-headway", default-features = false }
 moka = { version = "0.12", default-features = false }
 notify = "8.2.0"
 num_cpus = "1"
