@@ -18,6 +18,8 @@ use crate::config::file::{
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::file::{MltProcessConfig, MvtProcessConfig};
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::primitives::AutoOption;
 
 /// Default polling interval for [`PmtilesReloader`](crate::config::file::reload::pmtiles::PmtilesReloader)
@@ -88,6 +90,12 @@ pub struct PmtConfig {
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
 
+    /// Declared output encoding for all `PMTiles` sources.
+    /// Overrides global; overridden by per-source `output_format`.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
+
     #[serde(flatten, skip_serializing)]
     #[cfg_attr(feature = "unstable-schemas", schemars(skip))]
     pub unrecognized: UnrecognizedValues,
@@ -108,6 +116,8 @@ impl Default for PmtConfig {
             convert_to_mlt: None,
             #[cfg(all(feature = "mlt", feature = "_tiles"))]
             convert_to_mvt: None,
+            #[cfg(all(feature = "mlt", feature = "_tiles"))]
+            output_format: None,
             unrecognized: UnrecognizedValues::default(),
             pmtiles_directory_cache: PmtCache::default(),
         }
@@ -123,7 +133,8 @@ impl PartialEq for PmtConfig {
         #[cfg(all(feature = "mlt", feature = "_tiles"))]
         let base = base
             && self.convert_to_mlt == other.convert_to_mlt
-            && self.convert_to_mvt == other.convert_to_mvt;
+            && self.convert_to_mvt == other.convert_to_mvt
+            && self.output_format == other.output_format;
         // pmtiles_directory_cache is intentionally excluded from equality check
         base
     }

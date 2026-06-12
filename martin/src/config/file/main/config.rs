@@ -27,7 +27,7 @@ use crate::config::file::pmtiles::PmtConfig;
 #[cfg(feature = "postgres")]
 use crate::config::file::postgres::PostgresConfig;
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
-use crate::config::file::process::{MltProcessConfig, MvtProcessConfig};
+use crate::config::file::process::{MltProcessConfig, MvtProcessConfig, TileOutputFormat};
 #[cfg(feature = "sprites")]
 use crate::config::file::sprites::SpriteConfig;
 use crate::config::file::srv::SrvConfig;
@@ -164,6 +164,16 @@ pub struct Config {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+
+    /// Declared output encoding for all tile sources (global level).
+    /// Overridden by source-type or per-source `output_format`.
+    ///
+    /// When set to `mlt`, Martin converts MVT tiles to MLT on the fly when no
+    /// explicit `Accept` header is present, and advertises `"encoding": "mlt"` in
+    /// `TileJSON` and style responses.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
 
     #[serde(flatten, skip_serializing)]
     #[cfg_attr(feature = "unstable-schemas", schemars(skip))]

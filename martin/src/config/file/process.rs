@@ -8,15 +8,38 @@ use crate::config::file::UnrecognizedValues;
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::primitives::AutoOption;
 
+/// Declares the output tile encoding for a source.
+///
+/// When set to `Mlt`, Martin will convert MVT tiles to MLT on the fly
+/// for requests with no explicit `Accept` header, and will advertise
+/// `"encoding": "mlt"` in the `TileJSON` and style responses for that source.
+///
+/// Parsed from YAML as `output_format: mlt` or `output_format: mvt`.
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "unstable-schemas", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum TileOutputFormat {
+    /// Serve tiles as Mapbox Vector Tiles (default).
+    #[default]
+    Mvt,
+    /// Serve tiles as `MapLibre` Tiles, converting from MVT if necessary.
+    Mlt,
+}
+
 /// Internal carrier for resolved per-source processing settings.
 ///
-/// Not serialized directly - config files use `convert_to_mlt` / `convert_to_mvt`.
+/// Not serialized directly - config files use `convert_to_mlt` / `convert_to_mvt` /
+/// `output_format`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProcessConfig {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     pub convert_to_mlt: Option<MltProcessConfig>,
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+    /// Declared output encoding for this source. `None` means "follow the Accept header".
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    pub output_format: Option<TileOutputFormat>,
 }
 
 /// Configuration for MVT-to-MLT format conversion.
@@ -286,10 +309,12 @@ mod tests {
         let global = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Auto),
             convert_to_mvt: None,
+            output_format: None,
         };
         let per_source = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Disabled),
             convert_to_mvt: None,
+            output_format: None,
         };
         let resolved = resolve_process_config(&global, &ProcessConfig::default(), &per_source);
         assert_eq!(resolved.convert_to_mlt, Some(MltProcessConfig::Disabled));
@@ -301,10 +326,12 @@ mod tests {
         let global = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Auto),
             convert_to_mvt: None,
+            output_format: None,
         };
         let source_type = ProcessConfig {
             convert_to_mlt: None,
             convert_to_mvt: Some(MvtProcessConfig::Auto),
+            output_format: None,
         };
         let per_source = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Explicit(MltEncoderConfig {
@@ -312,6 +339,7 @@ mod tests {
                 ..Default::default()
             })),
             convert_to_mvt: None,
+            output_format: None,
         };
 
         let resolved = resolve_process_config(&global, &source_type, &per_source);
@@ -324,10 +352,12 @@ mod tests {
         let global = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Auto),
             convert_to_mvt: None,
+            output_format: None,
         };
         let source_type = ProcessConfig {
             convert_to_mlt: None,
             convert_to_mvt: Some(MvtProcessConfig::Auto),
+            output_format: None,
         };
 
         let resolved = resolve_process_config(&global, &source_type, &ProcessConfig::default());
@@ -340,6 +370,7 @@ mod tests {
         let global = ProcessConfig {
             convert_to_mlt: Some(MltProcessConfig::Auto),
             convert_to_mvt: None,
+            output_format: None,
         };
 
         let resolved = resolve_process_config(

@@ -11,6 +11,8 @@ use tracing::{error, instrument, warn};
 use crate::config::file::srv::SrvConfig;
 use crate::maplibre_style::Style;
 use crate::srv::server::DebouncedWarning;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::tile_source_manager::TileSourceManager;
 
 #[derive(Deserialize, Debug)]
 #[cfg_attr(feature = "unstable-schemas", derive(utoipa::IntoParams))]
@@ -45,6 +47,7 @@ pub async fn get_style_json(
     path: Path<StyleRequest>,
     styles: Data<StyleSources>,
     srv_config: Data<SrvConfig>,
+    #[cfg(all(feature = "mlt", feature = "_tiles"))] tile_manager: Option<Data<TileSourceManager>>,
 ) -> HttpResponse {
     let style_id = &path.style_id;
     let Some(path) = styles.style_json_path(style_id) else {
@@ -74,6 +77,15 @@ pub async fn get_style_json(
             let info = req.connection_info();
             let base_url = format!("{}://{}{prefix}", info.scheme(), info.host());
             style.expand_relative_urls(&base_url);
+
+            #[cfg(all(feature = "mlt", feature = "_tiles"))]
+            if let Some(manager) = tile_manager {
+                let mlt_ids = manager.tile_sources().mlt_output_source_ids();
+                if !mlt_ids.is_empty() {
+                    inject_mlt_encoding(&mut style, &mlt_ids, &base_url);
+                }
+            }
+
             HttpResponse::Ok().json(style)
         }
         Err(e) => {
@@ -88,6 +100,58 @@ pub async fn get_style_json(
                     "The requested style {style_id} is malformed: {e:?}"
                 ))
         }
+    }
+}
+
+/// Inject `"encoding": "mlt"` into any style source whose tile URL resolves to
+/// a Martin source configured with `output_format: mlt`.
+///
+/// Matching is performed after URL expansion, so relative URLs in the style file
+/// (e.g. `/my_source`) are already absolute when this runs.  For each style
+/// source, the path component of `url` (TileJSON endpoint) or the first entry in
+/// `tiles` is stripped of the `base_url` prefix and any trailing `/{z}/{x}/{y}`
+/// template, leaving just the source ID.  If that ID appears in `mlt_ids`, the
+/// source is annotated.
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+fn inject_mlt_encoding(
+    style: &mut Style,
+    mlt_ids: &std::collections::HashSet<String>,
+    base_url: &str,
+) {
+    for source in style.sources.values_mut() {
+        let candidate_url = source
+            .url
+            .as_deref()
+            .or_else(|| source.tiles.as_deref().and_then(|t| t.first().map(String::as_str)));
+
+        if let Some(url) = candidate_url {
+            if let Some(source_id) = extract_martin_source_id(url, base_url) {
+                if mlt_ids.contains(&source_id) {
+                    source
+                        .other
+                        .insert("encoding".to_string(), serde_json::Value::String("mlt".to_string()));
+                }
+            }
+        }
+    }
+}
+
+/// Extract a Martin source ID from a (possibly tile-template) URL.
+///
+/// Strips the `base_url` prefix and any trailing `/{z}/{x}/{y}` path segments,
+/// returning the first remaining path component as the source ID.
+///
+/// Returns `None` if the URL does not start with `base_url` or the remaining
+/// path is empty.
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+fn extract_martin_source_id(url: &str, base_url: &str) -> Option<String> {
+    let path = url.strip_prefix(base_url)?.trim_start_matches('/');
+    // Drop tile-template segments ({z}/{x}/{y}) that appear after the source ID.
+    let source_id = path.split('/').next()?.to_string();
+    if source_id.is_empty() || source_id.starts_with('{') {
+        None
+    } else {
+        Some(source_id)
     }
 }
 

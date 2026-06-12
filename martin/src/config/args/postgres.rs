@@ -84,6 +84,8 @@ impl PostgresArgs {
                 convert_to_mlt: None,
                 #[cfg(all(feature = "mlt", feature = "_tiles"))]
                 convert_to_mvt: None,
+                #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                output_format: None,
                 unrecognized: UnrecognizedValues::default(),
             })
             .collect();

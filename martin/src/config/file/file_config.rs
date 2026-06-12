@@ -21,6 +21,8 @@ use url::Url;
 use crate::config::file::{ConfigFileError, ConfigFileResult};
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::file::{MltProcessConfig, MvtProcessConfig};
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
 #[cfg(feature = "_tiles")]
 use crate::config::file::{ResolutionResult, TileSourceWarning};
 #[cfg(feature = "_tiles")]
@@ -412,6 +414,11 @@ pub struct FileConfigSource {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+    /// Declared output encoding for this source.
+    /// Overrides source-type and global `output_format`.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
     /// Zoom-level bounds for tile caching.
     #[serde(default, skip_serializing_if = "CachePolicy::is_empty")]
     #[cfg_attr(feature = "unstable-schemas", schemars(with = "CachePolicyShape"))]

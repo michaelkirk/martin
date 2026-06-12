@@ -20,6 +20,8 @@ use tracing::{instrument, warn};
 
 use crate::config::args::PreferredEncoding;
 use crate::config::file::ProcessConfig;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::TileOutputFormat;
 use crate::config::file::driver::Sink as _;
 use crate::config::file::srv::SrvConfig;
 use crate::reload::{NewSource, ReloadAdvisory};
@@ -463,6 +465,19 @@ impl<'a> DynTileSource<'a> {
         let cache_zoom = s.cache_zoom().contains(xyz.z);
         let src_id = s.get_id().to_string();
         let src = s.clone_source();
+        // When output_format: mlt is configured and no Accept header is present, the
+        // effective format is MLT.  Use this in the cache key so MLT and MVT entries
+        // for the same source are stored separately.
+        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+        let cache_format = if self.accepted_format.is_none()
+            && pc.output_format == Some(TileOutputFormat::Mlt)
+        {
+            Some(Format::Mlt)
+        } else {
+            self.accepted_format
+        };
+        #[cfg(not(all(feature = "mlt", feature = "_tiles")))]
+        let cache_format = self.accepted_format;
         let compute = || async move {
             let t = src.get_tile_with_etag(xyz, self.query_obj.as_ref()).await?;
             apply_pre_cache_processors(
@@ -481,7 +496,7 @@ impl<'a> DynTileSource<'a> {
                         src_id,
                         xyz,
                         self.query_str.map(ToString::to_string),
-                        self.accepted_format,
+                        cache_format,
                     ),
                     compute,
                 )

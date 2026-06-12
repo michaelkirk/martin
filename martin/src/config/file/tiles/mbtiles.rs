@@ -14,6 +14,8 @@ use crate::config::file::{
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::file::{MltProcessConfig, MvtProcessConfig};
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
 use crate::config::primitives::AutoOption;
 
 #[serde_with::skip_serializing_none]
@@ -31,6 +33,12 @@ pub struct MbtConfig {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+
+    /// Declared output encoding for all `MBTiles` sources.
+    /// Overrides global; overridden by per-source `output_format`.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
 
     #[serde(flatten, skip_serializing)]
     #[cfg_attr(feature = "unstable-schemas", schemars(skip))]
@@ -151,6 +159,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::default(),
                     })
                 ),
@@ -166,6 +176,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::default(),
                     })
                 ),
@@ -177,6 +189,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::new(CacheZoomRange::new(Some(0), Some(6))),
                     })
                 ),

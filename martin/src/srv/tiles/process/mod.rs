@@ -13,7 +13,7 @@ use to_mlt::convert_mvt_to_mlt;
 use to_mvt::convert_mlt_to_mvt;
 
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
-use crate::config::file::{MltProcessConfig, MvtProcessConfig, ProcessConfig};
+use crate::config::file::{MltProcessConfig, MvtProcessConfig, ProcessConfig, TileOutputFormat};
 
 /// Errors that can occur during tile post-processing.
 #[derive(thiserror::Error, Debug)]
@@ -60,6 +60,13 @@ pub fn apply_pre_cache_processors(
     if tile.data.is_empty() {
         return Ok(tile);
     }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    let accepted = if accepted.is_none() && config.output_format == Some(TileOutputFormat::Mlt) {
+        Some(Format::Mlt)
+    } else {
+        accepted
+    };
 
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     let tile = if accepted == Some(Format::Mlt) && tile.info.format == Format::Mvt {
@@ -141,6 +148,44 @@ mod tests {
     fn no_accept_header_is_noop() {
         let tile = make_tile(vec![1, 2, 3], Format::Mvt, Encoding::Uncompressed);
         let result = apply_pre_cache_processors(tile, &ProcessConfig::default(), None).unwrap();
+        assert_eq!(result.data, vec![1, 2, 3]);
+        assert_eq!(result.info.format, Format::Mvt);
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn output_format_mlt_converts_when_no_accept_header() {
+        let tile = make_tile(empty_layer_mvt_bytes(), Format::Mvt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            output_format: Some(TileOutputFormat::Mlt),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, None).unwrap();
+        assert_eq!(result.info.format, Format::Mlt);
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn output_format_mlt_respects_explicit_accept_mvt() {
+        // An explicit Accept: MVT overrides the output_format: mlt configuration.
+        let tile = make_tile(vec![1, 2, 3], Format::Mvt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            output_format: Some(TileOutputFormat::Mlt),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, Some(Format::Mvt)).unwrap();
+        assert_eq!(result.info.format, Format::Mvt);
+    }
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[test]
+    fn output_format_mvt_with_no_accept_is_noop() {
+        let tile = make_tile(vec![1, 2, 3], Format::Mvt, Encoding::Uncompressed);
+        let config = ProcessConfig {
+            output_format: Some(TileOutputFormat::Mvt),
+            ..Default::default()
+        };
+        let result = apply_pre_cache_processors(tile, &config, None).unwrap();
         assert_eq!(result.data, vec![1, 2, 3]);
         assert_eq!(result.info.format, Format::Mvt);
     }
