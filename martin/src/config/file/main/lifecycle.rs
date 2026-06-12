@@ -430,6 +430,7 @@ impl Config {
             let global = ProcessConfig {
                 convert_to_mlt: self.convert_to_mlt.clone(),
                 convert_to_mvt: self.convert_to_mvt.clone(),
+                output_format: self.output_format.clone(),
             };
 
             #[cfg(feature = "postgres")]
@@ -437,12 +438,14 @@ impl Config {
                 let source_type = ProcessConfig {
                     convert_to_mlt: pg.convert_to_mlt.clone(),
                     convert_to_mvt: pg.convert_to_mvt.clone(),
+                    output_format: pg.output_format.clone(),
                 };
                 if let Some(tables) = &pg.tables {
                     for (id, info) in tables {
                         let per_source = ProcessConfig {
                             convert_to_mlt: info.convert_to_mlt.clone(),
                             convert_to_mvt: info.convert_to_mvt.clone(),
+                            output_format: info.output_format.clone(),
                         };
                         map.insert(
                             id.clone(),
@@ -455,6 +458,7 @@ impl Config {
                         let per_source = ProcessConfig {
                             convert_to_mlt: info.convert_to_mlt.clone(),
                             convert_to_mvt: info.convert_to_mvt.clone(),
+                            output_format: info.output_format.clone(),
                         };
                         map.insert(
                             id.clone(),
@@ -468,12 +472,14 @@ impl Config {
             Self::insert_file_source_configs(&mut map, &global, &self.pmtiles, |c| ProcessConfig {
                 convert_to_mlt: c.convert_to_mlt.clone(),
                 convert_to_mvt: c.convert_to_mvt.clone(),
+                output_format: c.output_format.clone(),
             });
 
             #[cfg(feature = "mbtiles")]
             Self::insert_file_source_configs(&mut map, &global, &self.mbtiles, |c| ProcessConfig {
                 convert_to_mlt: c.convert_to_mlt.clone(),
                 convert_to_mvt: c.convert_to_mvt.clone(),
+                output_format: c.output_format.clone(),
             });
         }
 
@@ -502,6 +508,7 @@ impl Config {
                         FileConfigSrc::Obj(obj) => ProcessConfig {
                             convert_to_mlt: obj.convert_to_mlt.clone(),
                             convert_to_mvt: obj.convert_to_mvt.clone(),
+                            output_format: obj.output_format.clone(),
                         },
                         FileConfigSrc::Path(_) => ProcessConfig::default(),
                     };

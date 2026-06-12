@@ -21,7 +21,9 @@ pub use process::ProcessConfig;
 ))]
 pub(crate) use process::resolve_process_config;
 #[cfg(all(feature = "mlt", feature = "_tiles"))]
-pub use process::{MltEncoderConfig, MltProcessConfig, MvtEncoderConfig, MvtProcessConfig};
+pub use process::{
+    MltEncoderConfig, MltProcessConfig, MvtEncoderConfig, MvtProcessConfig, TileOutputFormat,
+};
 
 #[cfg(any(feature = "fonts", feature = "sprites", feature = "styles"))]
 mod resources;

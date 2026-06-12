@@ -12,6 +12,8 @@ use crate::config::args::BoundsCalcType;
 use crate::config::args::PreferredEncoding;
 #[cfg(all(feature = "webui", not(docsrs)))]
 use crate::config::args::WebUiMode;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
 use crate::config::file::{
     CachePolicy, CacheSizeConfig, GlobalCacheConfig, OnInvalid, UnrecognizedKeys,
 };
@@ -168,3 +170,6 @@ impl_empty_collect_unrecognized!(BoundsCalcType);
 
 #[cfg(all(feature = "webui", not(docsrs)))]
 impl_empty_collect_unrecognized!(WebUiMode);
+
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+impl_empty_collect_unrecognized!(TileOutputFormat);

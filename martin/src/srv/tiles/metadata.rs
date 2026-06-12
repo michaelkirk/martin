@@ -12,8 +12,12 @@ use serde::Deserialize;
 use tilejson::{TileJSON, tilejson};
 use url::form_urlencoded;
 
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::TileOutputFormat;
 use crate::config::file::srv::SrvConfig;
 use crate::tile_source_manager::TileSourceManager;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use martin_tile_utils::Format;
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "unstable-schemas", derive(utoipa::IntoParams))]
@@ -108,8 +112,26 @@ pub async fn get_source_info(
         .map(|tiles_url| tiles_url.to_string())
         .map_err(|e| ErrorBadRequest(format!("Can't build tiles URL: {e}")))?;
 
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    let all_mlt = !resolved.sources.is_empty()
+        && resolved.sources.iter().all(|(src, pc)| {
+            pc.output_format == Some(TileOutputFormat::Mlt)
+                || src.get_tile_info().format == Format::Mlt
+        });
+
     let just_sources: Vec<_> = resolved.sources.into_iter().map(|(s, _)| s).collect();
-    Ok(HttpResponse::Ok().json(merge_tilejson(&just_sources, tiles_url)))
+    #[cfg_attr(not(all(feature = "mlt", feature = "_tiles")), allow(unused_mut))]
+    let mut tj = merge_tilejson(&just_sources, tiles_url);
+
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    if all_mlt {
+        tj.other.insert(
+            "encoding".to_string(),
+            serde_json::Value::String("mlt".to_string()),
+        );
+    }
+
+    Ok(HttpResponse::Ok().json(tj))
 }
 
 #[must_use]

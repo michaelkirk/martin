@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::MartinResult;
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
 use crate::config::file::{
     CachePolicy, ConfigurationLivecycleHooks, TileSourceConfiguration, UnrecognizedValues,
 };
@@ -38,6 +40,12 @@ pub struct MbtConfig {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+
+    /// Declared output encoding for all `MBTiles` sources.
+    /// Overrides global; overridden by per-source `output_format`.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
 
     #[serde(flatten, skip_serializing)]
     #[cfg_attr(feature = "unstable-schemas", schemars(skip))]
@@ -137,6 +145,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::default(),
                     })
                 ),
@@ -152,6 +162,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::default(),
                     })
                 ),
@@ -163,6 +175,8 @@ mod tests {
                         convert_to_mlt: None,
                         #[cfg(all(feature = "mlt", feature = "_tiles"))]
                         convert_to_mvt: None,
+                        #[cfg(all(feature = "mlt", feature = "_tiles"))]
+                        output_format: None,
                         cache: CachePolicy::new(CacheZoomRange::new(Some(0), Some(6))),
                     })
                 ),
