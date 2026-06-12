@@ -78,6 +78,24 @@ impl TileSources {
         self.0.iter().map(|v| v.key().clone()).collect()
     }
 
+    /// Returns the IDs of all sources configured to serve MLT output (`output_format: mlt`).
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[must_use]
+    pub fn mlt_output_source_ids(&self) -> std::collections::HashSet<String> {
+        use crate::config::file::TileOutputFormat;
+        self.0
+            .iter()
+            .filter_map(|v| {
+                let (_, pc) = v.value();
+                if pc.output_format == Some(TileOutputFormat::Mlt) {
+                    Some(v.key().clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Gets a source and its process config by ID, returning 404 error if not found.
     pub fn get_source(&self, id: &str) -> actix_web::Result<(BoxedSource, ProcessConfig)> {
         Ok(self

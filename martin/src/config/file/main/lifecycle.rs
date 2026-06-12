@@ -453,6 +453,7 @@ impl Config {
             let global = ProcessConfig {
                 convert_to_mlt: self.convert_to_mlt.clone(),
                 convert_to_mvt: self.convert_to_mvt.clone(),
+                output_format: self.output_format.clone(),
             };
 
             #[cfg(feature = "postgres")]
@@ -460,12 +461,14 @@ impl Config {
                 let source_type = ProcessConfig {
                     convert_to_mlt: pg.convert_to_mlt.clone(),
                     convert_to_mvt: pg.convert_to_mvt.clone(),
+                    output_format: pg.output_format.clone(),
                 };
                 if let Some(tables) = &pg.tables {
                     Self::insert_source_configs(&mut map, &global, &source_type, tables, |info| {
                         ProcessConfig {
                             convert_to_mlt: info.convert_to_mlt.clone(),
                             convert_to_mvt: info.convert_to_mvt.clone(),
+                            output_format: info.output_format.clone(),
                         }
                     });
                 }
@@ -478,6 +481,7 @@ impl Config {
                         |info| ProcessConfig {
                             convert_to_mlt: info.convert_to_mlt.clone(),
                             convert_to_mvt: info.convert_to_mvt.clone(),
+                            output_format: info.output_format.clone(),
                         },
                     );
                 }
@@ -487,12 +491,14 @@ impl Config {
             Self::insert_file_source_configs(&mut map, &global, &self.pmtiles, |c| ProcessConfig {
                 convert_to_mlt: c.convert_to_mlt.clone(),
                 convert_to_mvt: c.convert_to_mvt.clone(),
+                output_format: c.output_format.clone(),
             });
 
             #[cfg(feature = "mbtiles")]
             Self::insert_file_source_configs(&mut map, &global, &self.mbtiles, |c| ProcessConfig {
                 convert_to_mlt: c.convert_to_mlt.clone(),
                 convert_to_mvt: c.convert_to_mvt.clone(),
+                output_format: c.output_format.clone(),
             });
 
             #[cfg(feature = "passthrough")]
@@ -502,12 +508,14 @@ impl Config {
                 let source_type = ProcessConfig {
                     convert_to_mlt: self.passthrough.convert_to_mlt.clone(),
                     convert_to_mvt: self.passthrough.convert_to_mvt.clone(),
+                    output_format: None,
                 };
                 Self::insert_source_configs(&mut map, &global, &source_type, sources, |src| {
                     match src {
                         PassthroughSrc::Detailed(obj) => ProcessConfig {
                             convert_to_mlt: obj.convert_to_mlt.clone(),
                             convert_to_mvt: obj.convert_to_mvt.clone(),
+                            output_format: None,
                         },
                         PassthroughSrc::Shorthand(_) => ProcessConfig::default(),
                     }
@@ -565,6 +573,7 @@ impl Config {
                     FileConfigSrc::Obj(obj) => ProcessConfig {
                         convert_to_mlt: obj.convert_to_mlt.clone(),
                         convert_to_mvt: obj.convert_to_mvt.clone(),
+                        output_format: obj.output_format.clone(),
                     },
                     FileConfigSrc::Path(_) => ProcessConfig::default(),
                 });

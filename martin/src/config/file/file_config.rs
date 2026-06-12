@@ -20,6 +20,8 @@ use tracing::{info, warn};
 #[cfg(feature = "_tiles")]
 use url::Url;
 
+#[cfg(all(feature = "mlt", feature = "_tiles"))]
+use crate::config::file::process::TileOutputFormat;
 use crate::config::file::{
     CollectUnrecognizedKeys, ConfigFileError, ConfigFileResult, UnrecognizedValues,
 };
@@ -376,6 +378,11 @@ pub struct FileConfigSource {
     #[cfg(all(feature = "mlt", feature = "_tiles"))]
     #[serde(default)]
     pub convert_to_mvt: Option<MvtProcessConfig>,
+    /// Declared output encoding for this source.
+    /// Overrides source-type and global `output_format`.
+    #[cfg(all(feature = "mlt", feature = "_tiles"))]
+    #[serde(default)]
+    pub output_format: Option<TileOutputFormat>,
     /// Zoom-level bounds for tile caching.
     #[serde(default, skip_serializing_if = "CachePolicy::is_empty")]
     #[cfg_attr(feature = "unstable-schemas", schemars(with = "CachePolicyShape"))]

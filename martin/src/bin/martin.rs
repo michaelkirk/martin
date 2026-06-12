@@ -89,6 +89,7 @@ async fn start(args: Args) -> MartinResult<()> {
         let pc = ProcessConfig {
             convert_to_mlt: config.convert_to_mlt.clone(),
             convert_to_mvt: config.convert_to_mvt.clone(),
+            output_format: config.output_format.clone(),
         };
         #[cfg(not(feature = "mlt"))]
         let pc = ProcessConfig::default();
